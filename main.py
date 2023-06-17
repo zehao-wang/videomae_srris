@@ -21,7 +21,7 @@ from collections import defaultdict
 
 # NOTE: use cam
 dataset_root_path = "../data/General/processed_split/"
-cam_type="cam1"
+cam_type="cam2"
 import pathlib
 dataset_root_path = pathlib.Path(dataset_root_path)
 video_count_train = len(list(dataset_root_path.glob(f"{cam_type}/train/*/*.mp4")))
@@ -85,18 +85,33 @@ else:
 resize_to = (height, width)
 
 num_frames_to_sample = model.config.num_frames
-sample_rate = 4
+sample_rate = 20
 fps = 30
-clip_duration = num_frames_to_sample * sample_rate / fps
+clip_duration = num_frames_to_sample * sample_rate / fps # larger clip duration to sample first, then subsample clip
 
-
+print("Number of frames to sample: ", num_frames_to_sample)
 # Training dataset transformations.
+
+# class Slicing(torch.nn.Module):
+#     def __init__(self, offset: int):
+#         super().__init__()
+#         self.offset = offset
+
+#     def forward(self, x: torch.Tensor) -> torch.Tensor:
+#         """
+#         Args:
+#             x (torch.Tensor): video tensor with shape (C, T, H, W).
+#         """
+#         x = x[:,self.offset:x.shape[1]-self.offset,:,:]
+#         return x
+
 train_transform = Compose(
     [
         ApplyTransformToKey(
             key="video",
             transform=Compose(
                 [
+                    # Slicing(offset=25),
                     UniformTemporalSubsample(num_frames_to_sample),
                     Lambda(lambda x: x / 255.0),
                     Normalize(mean, std),
@@ -127,6 +142,7 @@ val_transform = Compose(
             key="video",
             transform=Compose(
                 [
+                    # Slicing(offset=25),
                     UniformTemporalSubsample(num_frames_to_sample),
                     Lambda(lambda x: x / 255.0),
                     Normalize(mean, std),
@@ -155,54 +171,52 @@ test_dataset = pytorchvideo.data.Ucf101(
 # We can access the `num_videos` argument to know the number of videos we have in the
 # dataset.
 print("\n\033[1;32m [INFO]\033[0m dataset statistics (train, val, test):\n", train_dataset.num_videos, val_dataset.num_videos, test_dataset.num_videos, "\n")
-
-sample_video = next(iter(train_dataset))
-
-print("\033[1;32m [INFO]\033[0m dataset success, a batch dict contains: ", sample_video.keys())
-
-def investigate_video(sample_video):
-    """Utility to investigate the keys present in a single video sample."""
-    for k in sample_video:
-        if k == "video":
-            print(k, sample_video["video"].shape)
-        else:
-            print(k, sample_video[k])
-
-    print(f"Video label: {id2label[sample_video[k]]}")
-
-
-investigate_video(sample_video)
-
 import imageio
 import numpy as np
 from IPython.display import Image
 
+for i in range(10):
+    sample_video = next(iter(train_dataset))
 
-def unnormalize_img(img):
-    """Un-normalizes the image pixels."""
-    img = (img * std) + mean
-    img = (img * 255).astype("uint8")
-    return img.clip(0, 255)
+    print(f"\033[1;32m [INFO]\033[0m Index {i} dataset success, a batch dict contains: ", sample_video.keys())
+
+    def investigate_video(sample_video):
+        """Utility to investigate the keys present in a single video sample."""
+        for k in sample_video:
+            if k == "video":
+                print(k, sample_video["video"].shape)
+            else:
+                print(k, sample_video[k])
+
+        print(f"Video label: {id2label[sample_video[k]]}")
+
+    investigate_video(sample_video)
+
+    def unnormalize_img(img):
+        """Un-normalizes the image pixels."""
+        img = (img * std) + mean
+        img = (img * 255).astype("uint8")
+        return img.clip(0, 255)
 
 
-def create_gif(video_tensor, filename="sample.gif"):
-    """Prepares a GIF from a video tensor.
-    
-    The video tensor is expected to have the following shape:
-    (num_frames, num_channels, height, width).
-    """
-    video_tensor = video_tensor.permute(1, 0, 2, 3)
-    frames = []
-    for video_frame in video_tensor:
-        frame_unnormalized = unnormalize_img(video_frame.permute(1, 2, 0).numpy())
-        frames.append(frame_unnormalized)
-    kargs = {"duration": 0.25}
-    imageio.mimsave(filename, frames, "GIF", **kargs)
+    def create_gif(video_tensor, filename="sample.gif"):
+        """Prepares a GIF from a video tensor.
+        
+        The video tensor is expected to have the following shape:
+        (num_frames, num_channels, height, width).
+        """
+        video_tensor = video_tensor.permute(1, 0, 2, 3)
+        frames = []
+        for video_frame in video_tensor:
+            frame_unnormalized = unnormalize_img(video_frame.permute(1, 2, 0).numpy())
+            frames.append(frame_unnormalized)
+        kargs = {"duration": 0.25}
+        imageio.mimsave(filename, frames, "GIF", **kargs)
 
-video_tensor = sample_video["video"]
-create_gif(video_tensor)
+    video_tensor = sample_video["video"]
+    create_gif(video_tensor, f"sample-{i}.gif")
+
 print("\033[1;32m [INFO]\033[0m Please check sample.gif for processed video clip samples")
-
 
 from transformers import TrainingArguments, Trainer
 model_name = model_ckpt.split("/")[-1]
@@ -274,8 +288,6 @@ trainer = Trainer(
 
 train_results = trainer.train()
 print("\033[1;32m [INFO]\033[0m Train successfully!")
-
-trainer.evaluate(test_dataset)
 
 trainer.save_model()
 test_results = trainer.evaluate(test_dataset)
