@@ -4,6 +4,7 @@ import os
 import pprint
 
 input_root="outputs/feat_ssv2_finetune"
+input_root="outputs/feat_kinetics_finetune"
 
 # Read train+val feats
 print('\033[1;32m [INFO]\033[0m Read support set (train+val) feats')
@@ -49,3 +50,10 @@ for la in labels_unique:
     results[id2labels[la]] = {"acc": acc, "num_correct": sum(truth_table), "tot": len(truth_table)}
 
 pprint.pprint(results)
+
+cnt = 0
+tot=0
+for k,v in results.items():
+    cnt += v["num_correct"]
+    tot += v["tot"]
+print(f"Overall test accuracy: {cnt/tot} ({cnt}/{tot})")

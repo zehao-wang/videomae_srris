@@ -5,7 +5,7 @@ model_ckpt="MCG-NJU/videomae-base-finetuned-kinetics"
 batch_size = 4 # batch size for training and evaluation
 # NOTE: use cam
 dataset_root_path = "../data/General/processed_split/"
-cam_type="cam2"
+cam_type="cam1"
 
 import torch
 from collections import defaultdict
@@ -215,8 +215,9 @@ print("\033[1;32m [INFO]\033[0m Start extraction")
 model.eval()
 with torch.no_grad():
     # for split, dset in tqdm({ "val":val_dataset, "test":test_dataset}.items()):
+    # for split, dset in tqdm({"train":train_dataset, "val":val_dataset, "test":test_dataset}.items()):
     # for split, dset in tqdm({"train":train_dataset}.items()):
-    for split, dset in tqdm({"train":train_dataset, "val":val_dataset, "test":test_dataset}.items()):
+    for split, dset in tqdm({ "val":val_dataset, "test":test_dataset}.items()):
         all_states = []
         all_labels = []
         cnt = 0

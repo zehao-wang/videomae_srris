@@ -4,7 +4,9 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 import numpy as np
 import os
+from collections import defaultdict
 input_root='./outputs/feat_ssv2_finetune'
+input_root='./outputs/feat_kinetics_finetune'
 epochs = 100
 
 model = nn.Sequential(
@@ -19,6 +21,7 @@ class FeatDataset(Dataset):
         train_feats=np.load(input_path, allow_pickle=True).item()
         self.train_hidden_states = train_feats["hidden"]
         self.train_labels =  train_feats["labels"]
+        self.id2labels =  train_feats["id2label"]
 
     def __len__(self):
         return len(self.train_labels)
@@ -75,15 +78,23 @@ def test(dataloader, model, epoch):
     num_batches = len(dataloader)
     model.eval()
     test_loss, correct = 0, 0
+    per_cls_results = defaultdict(list)
     with torch.no_grad():
         for X, y in dataloader:
             X, y = X.cuda(), y.cuda()
             pred = model(X)
             test_loss += nn.functional.cross_entropy(pred, y).item()
+
+            for is_correct, gt_label in zip(pred.argmax(1)==y, y):
+                per_cls_results[dataloader.dataset.id2labels[gt_label.item()]].append(is_correct.item())
+
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
     test_loss /= num_batches
     correct /= size
     print(f"Epoch {epoch} Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    print("Per cls accuracy: ")
+    for k,v in per_cls_results.items():
+        print(f"{k}: {np.mean(v)} ({np.sum(v)} / {len(v)})")
     return 100* correct
 
 cached_best = {"acc": 0.0, "acc_test": 0.0}
