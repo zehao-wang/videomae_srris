@@ -1,4 +1,3 @@
-import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from scipy.special import softmax
@@ -16,11 +15,22 @@ class Visualizer(object):
         """
         labels=['Checking_Temperature', 'Cleaning_Plate', 'Closing_Clamps', 'Closing_Doors', 'Opening_Clamps', 'Opening_Doors', 'Putting_Plate_Back', 'Removing_Plate']
         # NOTE select color map from colorscales = px.colors.named_colorscales() 
+        print(mat.shape, len(labels), len(meta['pred_seq']))
         fig = px.imshow(mat, 
                     labels=dict(x="Clip Index", y="Action Type", color="Probability"),
+                x = [i for i in range(len(meta['pred_seq']))],
                 y=labels,
                 text_auto=True,
-                color_continuous_scale='viridis'
+                color_continuous_scale='viridis',
+        )
+        # fig.update_xaxes(tickangle=90)
+        fig.update_xaxes(side="top")
+        fig.update_layout(
+            xaxis = dict(
+                tickmode = 'array',
+                tickvals = [i for i in range(len(meta['pred_seq']))],
+                ticktext = [str(i)+"-"+v for i, v in enumerate(meta['pred_seq'])],
+            )
         )
 
         app = dash.Dash('app')
@@ -38,15 +48,15 @@ class Visualizer(object):
                     str(meta['gt_seq'])
                 ]
             ),
-            html.H4(id='text3',
-                children=[
-                    f"Predicted action sequence (sliding window): ", 
-                    str(meta['pred_seq'])
-                ]
-            ),
+            # html.H4(id='text3',
+            #     children=[
+            #         f"Predicted action sequence (sliding window): ", 
+            #         str(meta['pred_seq'])
+            #     ]
+            # ),
             dcc.Graph(
                 id='heatmap', 
-                figure=fig
+                figure=fig,
             ),
             html.Video(
                 controls = True,

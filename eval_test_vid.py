@@ -8,7 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.special import softmax
 
 parser = argparse.ArgumentParser(description='arguments')
-parser.add_argument('--data_root', type=str, default='./feats-sr5/', help='')
+parser.add_argument('--data_root', type=str, default='./assets/feats-sr5/', help='')
 parser.add_argument('--test_root', type=str, default='./assets/full-test-sr5/', help='')
 parser.add_argument('--cam_type', type=str, default='cam1', help='')
 parser.add_argument('--mode', type=str, default='few_shot', choices=['few_shot', 'linear_prob'], help='')
