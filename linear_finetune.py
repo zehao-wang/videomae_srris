@@ -5,8 +5,10 @@ from torch.utils.data import DataLoader
 import numpy as np
 import os
 from collections import defaultdict
-input_root='./outputs/feat_ssv2_finetune'
-input_root='./outputs/feat_kinetics_finetune'
+input_root='./outputs/feat_ssv2_finetune_cam2'
+# input_root='./outputs/feat_kinetics_finetune_cam2'
+input_root='./outputs/feat_kinetics_finetune_cam1'
+input_root='./outputs/feat_ssv2_finetune_cam1'
 epochs = 100
 
 model = nn.Sequential(
@@ -93,8 +95,9 @@ def test(dataloader, model, epoch):
     correct /= size
     print(f"Epoch {epoch} Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
     print("Per cls accuracy: ")
-    for k,v in per_cls_results.items():
-        print(f"{k}: {np.mean(v)} ({np.sum(v)} / {len(v)})")
+    for k in sorted(list(per_cls_results.keys())):
+        v = per_cls_results[k]
+        print(f"{k}:\t{np.mean(v)} ({np.sum(v)} / {len(v)})")
     return 100* correct
 
 cached_best = {"acc": 0.0, "acc_test": 0.0}

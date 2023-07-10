@@ -3,8 +3,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 import os
 import pprint
 
-input_root="outputs/feat_ssv2_finetune"
-input_root="outputs/feat_kinetics_finetune"
+input_root='./outputs/feat_ssv2_finetune_cam2'
+input_root='./outputs/feat_kinetics_finetune_cam2'
+input_root='./outputs/feat_kinetics_finetune_cam1'
+input_root='./outputs/feat_ssv2_finetune_cam1'
+input_root='../data/General/processed_split/feats-sr5/cam1'
 
 # Read train+val feats
 print('\033[1;32m [INFO]\033[0m Read support set (train+val) feats')
@@ -23,7 +26,7 @@ id2labels = train_feats["id2label"]
 labels_unique = np.unique(support_labels)
 
 X = []
-for la in labels_unique:
+for la in sorted(labels_unique):
     ins = np.where(support_labels == la)
     feats = support_feats[ins]
     X.append(np.mean(feats, axis=0))
@@ -49,7 +52,9 @@ for la in labels_unique:
     acc = sum(truth_table)/len(truth_table)
     results[id2labels[la]] = {"acc": acc, "num_correct": sum(truth_table), "tot": len(truth_table)}
 
-pprint.pprint(results)
+for k in sorted(list(results.keys())):
+    v = results[k]
+    print(f"{k}:\t{v['acc']} ({v['num_correct']} / {v['tot']})")
 
 cnt = 0
 tot=0

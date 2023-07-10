@@ -10,17 +10,16 @@ from tqdm import tqdm
 import random
 import copy
 from multiprocessing import Pool
-FONTFACE = cv2.FONT_HERSHEY_DUPLEX
-FONTSCALE = 1.5
-FONTCOLOR = (255, 255, 255)  # BGR, white
-BBOXCOLOR = (255, 0, 0)  # BGR, white
-THICKNESS = 2
-LINETYPE = 2
+import argparse
 
-data_root = '../data/General'
+
+parser = argparse.ArgumentParser(description='arguments')
+parser.add_argument('--frame_shift', type=int, default=5, help='small frame padding extension to handle annotation error')
+parser.add_argument('--data_root', type=str, default='../data/General', help='')
+parser.add_argument('--out_root', type=str, default='../data/General/processed', help='')
+args = parser.parse_args()
+
 short_side = None
-out_root = '../data/General/processed'
-
 CAM_MAPPING = {"Camera1_anonymized.mp4": "cam1", "Camera2_anonymized.mp4":"cam2", 'SmartGlasses_anonymized.mp4':'ego'}
 def center_crop(img, dim):
 	"""Returns center cropped image
@@ -58,7 +57,7 @@ def process_video(video_path, duration=None):
 
     return frames, timestamps
 
-def visualize_and_dump(frames_dict, annts, dump_dir, prefix="", shift=25):
+def visualize_and_dump(frames_dict, annts, dump_dir, prefix="", shift=5):
     """
     Args:
         frames:
@@ -91,6 +90,10 @@ def visualize_and_dump(frames_dict, annts, dump_dir, prefix="", shift=25):
             # frames_full = copy.deepcopy(frames_dict[key]['frames'])
             # for i, frame in enumerate(frames[max(start_idx-shift, 0): min(end_idx+1+shift, len(frames)-1)]):
             #     cv2.imwrite(os.path.join(cam_out_dir, f"{i}.png"), frame[:, :, ::-1])
+            # FONTSCALE = 1.5
+            # FONTFACE = cv2.FONT_HERSHEY_DUPLEX
+            # THICKNESS = 2
+            # LINETYPE = 2
 
             # for frame in frames[start_idx: end_idx+1]: 
             #     frame = cv2.putText(frame, class_name, (bbox_s[0], bbox_s[1]+ 80), FONTFACE, FONTSCALE,
@@ -102,19 +105,19 @@ def visualize_and_dump(frames_dict, annts, dump_dir, prefix="", shift=25):
             # vid.write_videofile(os.path.join(out_dir, f"{vid_idx}.avi"), codec='png',remove_temp=True)
             vid.write_videofile(os.path.join(out_dir, f"{vid_idx}.mp4"), remove_temp=True)
 
-def run(folder_name):
+def run(args, folder_name):
     idx = folder_name.split()[0]
 
     # video_files = ['Camera1_anonymized.mp4', 'Camera2_anonymized.mp4', 'SmartGlasses_anonymized.mp4']
     video_files = ['Camera1_anonymized.mp4', 'Camera2_anonymized.mp4']
 
     meta_files = []
-    for file in os.listdir(os.path.join(data_root, 'Annotations')):
+    for file in os.listdir(os.path.join(args.data_root, 'Annotations')):
         if file.startswith(idx):
             meta_files.append(file)
 
     for meta_file in sorted(meta_files):
-        meta = json.load(open(os.path.join(data_root, 'Annotations', meta_file)))
+        meta = json.load(open(os.path.join(args.data_root, 'Annotations', meta_file)))
         camera_id = meta['metadata']['name'].split('.')[0].split('_')[-1]
         duration = meta['metadata']['duration']
 
@@ -123,12 +126,12 @@ def run(folder_name):
         frame_dict = {}
         for video_file in video_files:
             if camera_id in video_file:
-                frames, timestamps = process_video(os.path.join(data_root, 'Videos', folder_name, video_file), duration=duration)
+                frames, timestamps = process_video(os.path.join(args.data_root, 'Videos', folder_name, video_file), duration=duration)
                 print(f"Main {video_file}: ", len(frames))
                 frame_dict[video_file] = {"frames": frames, "timestamps": timestamps}
                 main_cam = video_file
             else:
-                frames, timestamps = process_video(os.path.join(data_root, 'Videos', folder_name, video_file))
+                frames, timestamps = process_video(os.path.join(args.data_root, 'Videos', folder_name, video_file))
                 print(f"Others {video_file}: ", len(frames))
                 frame_dict[video_file] = {"frames": frames}
 
@@ -172,17 +175,17 @@ def run(folder_name):
                     annotations[ins_id]['bbox'].append((annts['points']['x1'], annts['points']['y1'], annts['points']['x2'], annts['points']['y2']))
                     annotations[ins_id]['is_event']=False
 
-        visualize_and_dump(frame_dict, annotations, os.path.join(out_root), prefix=idx)
+        visualize_and_dump(frame_dict, annotations, os.path.join(args.out_root), prefix=idx, shift=args.frame_shift)
 
+if __name__ == "__main__":
+    # pool = Pool(4)
+    for folder_name in os.listdir(os.path.join(args.data_root, 'Videos')):
+        # pool.apply_async(run, args=(folder_name, ))
+        run(args, folder_name)
 
-# pool = Pool(4)
-for folder_name in os.listdir(os.path.join(data_root, 'Videos')):
-    # pool.apply_async(run, args=(folder_name, ))
-    run(folder_name)
+        # import ipdb;ipdb.set_trace() # breakpoint 97
+        # print()
 
-    # import ipdb;ipdb.set_trace() # breakpoint 97
-    # print()
-
-# pool.close()
-# pool.join()
+    # pool.close()
+    # pool.join()
 
