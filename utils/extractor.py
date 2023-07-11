@@ -132,7 +132,7 @@ class Extractor(object):
         return video, {"label": label_id, "label_name": label}
 
     
-    def extract(self, video_path: str, no_label:bool=False, use_clip_shift:bool=False):
+    def extract(self, video_path: str, no_label:bool=False):
         """
         Extract one feature from the full video in video_path
         Args:
@@ -144,6 +144,7 @@ class Extractor(object):
         feat_list = []
         is_last_clip = False
         self._next_clip_start_time = 0
+        clip_times = []
         while not is_last_clip:    
             (
                 clip_start,
@@ -155,13 +156,8 @@ class Extractor(object):
                 self._next_clip_start_time, video.duration, info_dict
             )
 
-            if isinstance(clip_start, list):
-                import ipdb;ipdb.set_trace() # breakpoint 125
-
-            if aug_index == 0:
-                video_clip = video.get_clip(clip_start, clip_end)
-            else:
-                raise ValueError("Unexpected aug index")
+            assert aug_index == 0
+            video_clip = video.get_clip(clip_start, clip_end)
             
             inputs = self.transform({"video": video_clip['video']})
             inputs = {"pixel_values": inputs["video"].permute(1, 0, 2, 3)[None, ...]}
@@ -171,15 +167,16 @@ class Extractor(object):
             outputs = self.model.videomae(**inputs)
             feat = outputs['last_hidden_state'].detach().cpu().numpy()[0,0]
             feat_list.append(feat)
-            if use_clip_shift:
-                self._next_clip_start_time = (clip_end - self.clip_duration/4)
-            else:
-                self._next_clip_start_time = clip_end
+            clip_times.append((float(clip_start/video.duration), float(clip_end/video.duration)))
+
+            # NOTE: we add 25% overlapping
+            self._next_clip_start_time = (clip_end - self.clip_duration/4)
 
         # Reset states
         video.close()
         self.clip_sampler.reset()
-
+        info_dict.update({"video_duration": float(video.duration), "clip_times": clip_times})
+        
         return feat_list, info_dict
     
     def get_clips(self, video_path, visualization=False):
@@ -200,13 +197,7 @@ class Extractor(object):
         else:
             transform=Compose(
                 [
-                    ApplyTransformToKey(
-                        key="video",
-                        transform=Compose(
-                            [
-                            ]
-                        ),
-                    ),
+                    ApplyTransformToKey(key="video",transform=Compose([])),
                 ]
             )
 
@@ -228,7 +219,8 @@ class Extractor(object):
             video_clip = video.get_clip(clip_start, clip_end)
             frames = transform({"video": video_clip['video']})['video'].permute(1, 0, 2, 3)
             clip_list.append(frames.cpu().numpy())
-            # print(clip_end, type(clip_end), video.duration, type(video.duration))
+
+            # NOTE: we add 25% overlapping
             self._next_clip_start_time = (clip_end - self.clip_duration/4)
 
         # Reset states
@@ -236,10 +228,3 @@ class Extractor(object):
         self.clip_sampler.reset()
         return clip_list
     
-    # def collate_fn(self, examples):
-    #     """The collation function to be used by `Trainer` to prepare data batches."""
-    #     # permute to (num_frames, num_channels, height, width)
-    #     pixel_values = torch.stack(
-    #         [example["video"].permute(1, 0, 2, 3) for example in examples]
-    #     )
-    #     return {"pixel_values": pixel_values}
