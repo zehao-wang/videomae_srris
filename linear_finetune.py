@@ -5,37 +5,46 @@ from torch.utils.data import DataLoader
 import numpy as np
 import os
 from collections import defaultdict
-input_root='./outputs/feat_ssv2_finetune_cam2'
-# input_root='./outputs/feat_kinetics_finetune_cam2'
-input_root='./outputs/feat_kinetics_finetune_cam1'
-input_root='./outputs/feat_ssv2_finetune_cam1'
+from scipy.special import softmax
+
+input_root='./assets/dset-feats-sr5/cam1'
+test_root='./assets/dset-feat-test-sr5/'
 epochs = 100
 
 model = nn.Sequential(
-        nn.Linear(768, 8),
+        nn.Linear(768, 64),
+        nn.ReLU(),
+        nn.Linear(64, 8)
 ).cuda()
 
 optimizer = torch.optim.Adam(model.parameters())
 
-
 class FeatDataset(Dataset):
-    def __init__(self, input_path):
-        train_feats=np.load(input_path, allow_pickle=True).item()
-        self.train_hidden_states = train_feats["hidden"]
-        self.train_labels =  train_feats["labels"]
-        self.id2labels =  train_feats["id2label"]
+    def __init__(self, input_path, mode='train'):
+        feats=np.load(input_path, allow_pickle=True).item()
+        self.id2labels =  feats["id2label"]
+
+        if mode == 'train':
+            self.hidden_states = []
+            self.labels = []
+            for label, subsample in zip(feats["labels"], feats["feat_subsamples"]):
+                self.hidden_states += subsample
+                self.labels += len(subsample) * [label]
+        else:
+            self.hidden_states = feats['feat']
+            self.labels = feats['labels']
 
     def __len__(self):
-        return len(self.train_labels)
+        return len(self.labels)
 
     def __getitem__(self, idx):
-        datum = self.train_hidden_states[idx]
-        label = self.train_labels[idx]
+        datum = self.hidden_states[idx]
+        label = self.labels[idx]
         return datum, label
 
 train_dset = FeatDataset(os.path.join(input_root, "train.npy"))
-val_dset = FeatDataset(os.path.join(input_root, "val.npy"))
-test_dset = FeatDataset(os.path.join(input_root, "test.npy"))
+val_dset = FeatDataset(os.path.join(input_root, "val.npy"), mode='val')
+test_dset = FeatDataset(os.path.join(input_root, "test.npy"), mode='test')
 
 train_dataloader = DataLoader(train_dset, batch_size=64, shuffle=True)
 val_dataloader = DataLoader(val_dset, batch_size=64, shuffle=True)
@@ -111,3 +120,47 @@ for t in range(epochs):
         cached_best['acc_test'] = acc_test
     print(f"Best: val {cached_best['acc']}, test {cached_best['acc_test']}")
 print("Done!")
+
+
+# NOTE: extract test feat from std test data
+print('\033[1;32m [INFO]\033[0m Extracting test video clip prob')
+def load_test_feats(test_root, cam_type, test_ids= ['012', '014', '015', '016']):
+    # Read test feats
+    if cam_type=='cam1':
+        test_path = os.path.join(test_root, '{test_id}', 'Camera1.npy')
+    elif cam_type=='cam2':
+        test_path = os.path.join(test_root, '{test_id}', 'Camera2.npy')
+    else:
+        raise NotImplementedError()
+    
+    hidden_dict = dict()
+    labels = dict()
+    id2label = dict()
+    for test_id in test_ids:
+        feats=np.load(test_path.format(test_id=test_id), allow_pickle=True).item()
+        hidden_states = feats["feat"]
+        hidden_dict[test_id] = hidden_states
+        if feats['labels'] is not None:
+            labels[test_id] = feats['labels']
+        else:
+            labels[test_id] = ["No records"]
+        
+        id2label = feats['id2label']
+
+    return hidden_dict, labels, id2label
+
+cam_type = input_root.split('/')[-1]
+hidden_dict, labels, id2label = load_test_feats(test_root, cam_type)
+
+test_results = {}
+for test_id,v in hidden_dict.items():
+    inputs = torch.from_numpy(np.stack(v)).cuda()
+    model.eval()
+    with torch.no_grad():
+        pred = model(inputs)
+        mat = softmax(pred.cpu().numpy(), axis=1)
+        preds = np.argmax(mat, axis=1)
+
+        test_results[test_id] = {"mat": mat.T , "preds": preds}
+
+np.save(os.path.join(test_root, "linearprob_test.npy"), test_results)

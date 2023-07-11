@@ -6,6 +6,11 @@ import dash
 from dash import dcc, html, Input, Output
 import os
 
+def color(color, text):
+    return f"<span style='color:{str(color)}'> {str(text)} </span>"
+
+colors = ['red', 'green', 'yellow', 'blue']
+
 
 class Visualizer(object):
     def __init__(self, mat, sub_folder='', meta=None) -> None:
@@ -14,22 +19,38 @@ class Visualizer(object):
             mat: expect shape of [n_cls, n_clips]
         """
         labels=['Checking_Temperature', 'Cleaning_Plate', 'Closing_Clamps', 'Closing_Doors', 'Opening_Clamps', 'Opening_Doors', 'Putting_Plate_Back', 'Removing_Plate']
+        labels=['Checking_Temperature', 'Opening_Doors', 'Opening_Clamps', 'Removing_Plate', 'Cleaning_Plate', 'Putting_Plate_Back', 'Closing_Clamps', 'Closing_Doors']
         # NOTE select color map from colorscales = px.colors.named_colorscales() 
         print(mat.shape, len(labels), len(meta['pred_seq']))
+        # x = [
+        #     [i for i in range(len(meta['pred_seq']))],
+        #     [v for i, v in enumerate(meta['pred_seq'])]
+        # ]
+        x = [i for i in range(len(meta['pred_seq']))]
         fig = px.imshow(mat, 
                     labels=dict(x="Clip Index", y="Action Type", color="Probability"),
-                x = [i for i in range(len(meta['pred_seq']))],
+                x = x,
                 y=labels,
                 text_auto=True,
                 color_continuous_scale='viridis',
         )
+
+        tick_texts = []
+        for i, (v, gt_l) in enumerate(zip(meta['pred_seq'], meta['gt_seq'])):
+            if v == gt_l:
+                tick_texts.append(color('green', v))
+            else:
+                tick_texts.append(color('red', "pred: "+v + "<br>" + "gt: "+gt_l))
+
         # fig.update_xaxes(tickangle=90)
         fig.update_xaxes(side="top")
         fig.update_layout(
             xaxis = dict(
+                tickfont = dict(size=10),
                 tickmode = 'array',
                 tickvals = [i for i in range(len(meta['pred_seq']))],
-                ticktext = [str(i)+"-"+v for i, v in enumerate(meta['pred_seq'])],
+                # ticktext = [str(i)+"-"+v for i, v in enumerate(meta['pred_seq'])],
+                ticktext = tick_texts,
             )
         )
 
@@ -42,12 +63,12 @@ class Visualizer(object):
                     
                 ]
             ),
-            html.H4(id='text2',
-                children=[
-                    f"Ground Truth action sequence: ", 
-                    str(meta['gt_seq'])
-                ]
-            ),
+            # html.H4(id='text2',
+            #     children=[
+            #         f"Ground Truth action sequence: ", 
+            #         str(meta['gt_seq'])
+            #     ]
+            # ),
             # html.H4(id='text3',
             #     children=[
             #         f"Predicted action sequence (sliding window): ", 
